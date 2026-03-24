@@ -1,0 +1,15 @@
+{
+  "name": "qr-tracker",
+  "version": "1.0.0",
+  "description": "QR code scan tracker with SQLite storage",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "setup": "node setup.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "qrcode": "^1.5.3",
+    "sql.js": "^1.14.1"
+  }
+}
