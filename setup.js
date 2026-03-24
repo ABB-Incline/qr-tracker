@@ -1,44 +1,23 @@
 /**
  * setup.js — Create a new trackable QR code
+ * Registers the QR code with your live server over HTTP.
  *
  * Usage:
  *   node setup.js
  *
  * Or pass args directly:
- *   node setup.js "My Campaign" "https://example.com" "http://yourserver.com"
+ *   node setup.js "My Campaign" "https://example.com" "https://your-railway-url.up.railway.app"
  */
-const initSqlJs = require("sql.js");
 const QRCode = require("qrcode");
 const path = require("path");
 const fs = require("fs");
 const readline = require("readline");
 const crypto = require("crypto");
 
-const DB_PATH = path.join(__dirname, "scans.db");
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+const ask = (q) => new Promise((res) => rl.question(q, res));
 
 async function main() {
-  const SQL = await initSqlJs();
-  let db;
-  if (fs.existsSync(DB_PATH)) {
-    db = new SQL.Database(fs.readFileSync(DB_PATH));
-  } else {
-    db = new SQL.Database();
-  }
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS qr_codes (
-      id TEXT PRIMARY KEY, name TEXT NOT NULL,
-      destination TEXT NOT NULL, created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS scans (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, qr_id TEXT NOT NULL,
-      scanned_at TEXT NOT NULL, FOREIGN KEY (qr_id) REFERENCES qr_codes(id)
-    );
-  `);
-
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const ask = (q) => new Promise((res) => rl.question(q, res));
-
   console.log("\n🔲 QR Tracker — Create New Code\n");
 
   let name = process.argv[2];
@@ -47,7 +26,7 @@ async function main() {
 
   if (!name) name = await ask("QR Code name (e.g. 'Summer Campaign'): ");
   if (!destination) destination = await ask("Destination URL (e.g. https://yourwebsite.com): ");
-  if (!serverBase) serverBase = await ask("Your server base URL (e.g. http://localhost:3000): ");
+  if (!serverBase) serverBase = await ask("Your server base URL (e.g. https://your-railway-url.up.railway.app): ");
   rl.close();
 
   name = name.trim();
@@ -60,10 +39,31 @@ async function main() {
   }
 
   const id = crypto.randomBytes(5).toString("hex");
-  db.run("INSERT INTO qr_codes (id, name, destination, created_at) VALUES (?, ?, ?, ?)",
-    [id, name, destination, new Date().toISOString()]);
-  fs.writeFileSync(DB_PATH, Buffer.from(db.export()));
 
+  // Register with the live server via HTTP
+  console.log(`\nRegistering with server at ${serverBase}...`);
+  try {
+    const response = await fetch(`${serverBase}/api/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, name, destination }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error(`❌ Server error: ${response.status} — ${text}`);
+      process.exit(1);
+    }
+
+    const result = await response.json();
+    console.log(`✅ Registered on server: ${result.message}`);
+  } catch (err) {
+    console.error(`❌ Could not reach server: ${err.message}`);
+    console.error(`   Make sure your server is running at ${serverBase}`);
+    process.exit(1);
+  }
+
+  // Generate QR code image
   const trackingUrl = `${serverBase}/track/${id}`;
   const outputDir = path.join(__dirname, "qrcodes");
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
