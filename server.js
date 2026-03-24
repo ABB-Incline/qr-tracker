@@ -335,6 +335,24 @@ loadReports();
 </body></html>`);
 });
 
+// ─── API: CREATE QR CODE ─────────────────────────────────────────────────────
+app.use(express.json());
+app.post("/api/create", (req, res) => {
+  const { id, name, destination } = req.body;
+  if (!id || !name || !destination) {
+    return res.status(400).json({ error: "id, name, and destination are required" });
+  }
+  try {
+    run(
+      "INSERT INTO qr_codes (id, name, destination, created_at) VALUES (?, ?, ?, ?)",
+      [id, name, destination, new Date().toISOString()]
+    );
+    res.json({ message: `QR code '${name}' created with id ${id}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── API: REPORTS DATA ────────────────────────────────────────────────────────
 app.get("/api/reports", (req, res) => {
   const { from, to, grouping = "day" } = req.query;
